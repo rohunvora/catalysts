@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+:root {
+  /* Terminal dark theme - near black, not gray */
+  --background: #0a0a0c;
+  --background-elevated: #111114;
+  --background-card: #16161a;
+  --background-hover: #1c1c21;
+  
+  /* Text hierarchy */
+  --foreground: #e4e4e7;
+  --foreground-muted: #a1a1aa;
+  --foreground-subtle: #71717a;
+  
+  /* Accent colors */
+  --accent-primary: #3b82f6;
+  --accent-success: #22c55e;
+  --accent-warning: #eab308;
+  --accent-danger: #ef4444;
+  
+  /* Event type colors - distinct, muted */
+  --event-whale: #8b5cf6;
+  --event-liquidity: #06b6d4;
+  --event-supply: #f59e0b;
+  --event-privilege: #ef4444;
+  --event-incident: #dc2626;
+  --event-listing: #22c55e;
+  --event-ship: #3b82f6;
+  --event-social: #ec4899;
+  
+  /* Severity */
+  --severity-low: #22c55e;
+  --severity-med: #eab308;
+  --severity-high: #ef4444;
+  
+  /* Borders */
+  --border: #27272a;
+  --border-subtle: #1e1e22;
+  
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-elevated: var(--background-elevated);
+  --color-background-card: var(--background-card);
+  --color-background-hover: var(--background-hover);
+  
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-success: var(--accent-success);
+  --color-accent-warning: var(--accent-warning);
+  --color-accent-danger: var(--accent-danger);
+  
+  --color-event-whale: var(--event-whale);
+  --color-event-liquidity: var(--event-liquidity);
+  --color-event-supply: var(--event-supply);
+  --color-event-privilege: var(--event-privilege);
+  --color-event-incident: var(--event-incident);
+  --color-event-listing: var(--event-listing);
+  --color-event-ship: var(--event-ship);
+  --color-event-social: var(--event-social);
+  
+  --color-severity-low: var(--severity-low);
+  --color-severity-med: var(--severity-med);
+  --color-severity-high: var(--severity-high);
+  
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Terminal-style scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-subtle);
+}
+
+/* Monospace for numbers and addresses */
+.font-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Card animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Selection */
+::selection {
+  background: var(--accent-primary);
+  color: white;
+}
