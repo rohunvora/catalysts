@@ -482,3 +482,4 @@ export function clearBuffers(): void {
 export function addCatalystToBuffer(catalyst: CatalystCard): void {
   bufferCatalyst(catalyst);
 }
+

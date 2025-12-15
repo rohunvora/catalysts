@@ -515,3 +515,4 @@ export function getCacheStats(): { size: number; jupiterLoaded: boolean } {
     jupiterLoaded: jupiterTokens !== null && jupiterTokensExpiry > Date.now(),
   };
 }
+

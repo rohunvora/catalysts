@@ -382,3 +382,4 @@ export function clearCaches(): void {
   tokenListExpiry = 0;
   recentPrices.clear();
 }
+
