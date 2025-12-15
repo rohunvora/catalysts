@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchTokenInfo, solscanTokenUrl } from "@/lib/solana";
 import { generateCatalystFromNews, rankNewsByRelevance, RawNewsItem } from "@/lib/catalyst-generator";
-import { searchTokenTweets } from "@/lib/twitter";
+import { searchTokenTweets, searchTwitterRaw } from "@/lib/twitter";
 import { CatalystCard } from "@/types/catalyst";
+import { extractNarrative, narrativeToCatalystCard } from "@/lib/narrative";
 
 // Simple in-memory cache (use Redis in production)
 const cache = new Map<string, { data: CatalystCard[]; timestamp: number }>();
@@ -56,21 +57,39 @@ export async function GET(request: NextRequest) {
     
     const { symbol, name } = tokenInfo;
     
-    // Step 2: Search Twitter for mentions of this token
+    // Step 2: Search Twitter for raw tweets (for narrative analysis)
     console.log(`Searching Twitter for ${symbol} (${mint})...`);
-    const twitterResults = await searchTokenTweets(mint, symbol, name);
-    console.log(`Found ${twitterResults.length} tweets`);
+    const rawTweets = await searchTwitterRaw(symbol, name, 30);
+    console.log(`Found ${rawTweets.tweets.length} raw tweets`);
     
-    // Step 3: Combine all news sources
+    // Step 3: Extract narrative using LLM
+    console.log("Extracting narrative with LLM...");
+    const narrative = await extractNarrative(symbol, name, rawTweets.tweets);
+    
+    // Step 4: Also get filtered tweets for traditional catalyst cards
+    const twitterResults = await searchTokenTweets(mint, symbol, name);
+    console.log(`Found ${twitterResults.length} filtered tweets`);
+    
+    // Step 5: Combine all news sources
     const allNews: RawNewsItem[] = [...twitterResults];
     
-    // Step 4: Rank and filter by relevance
+    // Step 6: Rank and filter by relevance
     const rankedNews = rankNewsByRelevance(allNews, symbol);
     
-    // Step 5: Generate catalyst cards
-    const catalysts: CatalystCard[] = rankedNews
-      .slice(0, 10) // Max 10 catalysts
+    // Step 7: Generate catalyst cards from filtered tweets
+    const tweetCatalysts: CatalystCard[] = rankedNews
+      .slice(0, 10)
       .map(news => generateCatalystFromNews(news, symbol, mint));
+    
+    // Step 8: If we have narrative analysis with a catalyst, add it as the top card
+    const catalysts: CatalystCard[] = [];
+    if (narrative?.latest_catalyst) {
+      const narrativeCard = narrativeToCatalystCard(narrative, symbol, mint);
+      if (narrativeCard) {
+        catalysts.push(narrativeCard);
+      }
+    }
+    catalysts.push(...tweetCatalysts);
     
     // Cache results
     cache.set(mint, { data: catalysts, timestamp: Date.now() });
@@ -79,10 +98,16 @@ export async function GET(request: NextRequest) {
       mint,
       symbol,
       name,
+      // NARRATIVE: What is this token?
+      narrative: narrative?.narrative || null,
+      // LATEST CATALYST: What's the most important recent event?
+      latest_catalyst: narrative?.latest_catalyst || null,
+      // All catalyst cards (narrative card first if available)
       catalysts,
       catalyst_count: catalysts.length,
       sources: {
-        twitter: twitterResults.length,
+        twitter: rawTweets.tweets.length,
+        filtered: twitterResults.length,
       },
       generated_at: new Date().toISOString(),
       solscan_url: solscanTokenUrl(mint),

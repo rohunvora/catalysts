@@ -395,10 +395,11 @@ export async function searchTokenTweets(
     }
   }
   
-  // Filter pipeline: spam → relevance → engagement → credibility sort
+  // Filter pipeline: spam → strict relevance → engagement → credibility sort
   // (spam first because it's the cheapest filter)
   const afterSpam = filterSpamTweets(allTweets);
-  const afterRelevance = filterForCryptoRelevance(afterSpam, cleanSymbol);
+  // Use the stricter filter that catches different CAs and requires name match
+  const afterRelevance = filterForStrictRelevance(afterSpam, cleanSymbol, name);
   const afterEngagement = filterHighSignalTweets(afterRelevance, 2); // Lower threshold
   const sorted = filterByCredibility(afterEngagement);
   
@@ -420,5 +421,140 @@ export async function getUserTweets(
   }
   
   return tweetsToNewsItems(result.tweets);
+}
+
+// Search Twitter and return RAW tweets (for LLM analysis)
+// Less aggressive filtering - keep more context for narrative extraction
+export async function searchTwitterRaw(
+  symbol: string,
+  name: string | undefined,
+  maxResults: number = 30
+): Promise<TwitterSearchResult> {
+  const cleanSymbol = symbol.replace(/^\$/, "");
+  
+  // Build search queries - prioritize full name for multi-word names
+  const queries: string[] = [];
+  
+  // For multi-word names like "Franklin The Turtle", ONLY search the exact full name
+  // This prevents false positives from generic word matches
+  if (name && name.includes(" ") && name.length > 8) {
+    queries.push(`"${name}"`);
+    // Also try key unique words from the name
+    const nameWords = name.split(/\s+/).filter(w => w.length > 3);
+    if (nameWords.length >= 2) {
+      // For "Franklin The Turtle", search "Franklin Turtle" 
+      queries.push(`"${nameWords.join(" ")}" solana`);
+    }
+  } else if (cleanSymbol.length >= 4) {
+    // For longer symbols, search with crypto context
+    queries.push(`"$${cleanSymbol}" solana`);
+    queries.push(`"${cleanSymbol}" solana token`);
+  }
+  
+  // If no good queries, fall back to symbol + crypto context
+  if (queries.length === 0 && cleanSymbol.length >= 3) {
+    queries.push(`"${cleanSymbol}" crypto solana`);
+  }
+  
+  const allTweets: Tweet[] = [];
+  const seenIds = new Set<string>();
+  
+  for (const query of queries.slice(0, 2)) {
+    console.log(`Twitter raw search query: "${query}"`);
+    const result = await searchTwitter(query, Math.ceil(maxResults / 2));
+    
+    if (result.error) {
+      console.warn(`Raw search warning for "${query}":`, result.error);
+      continue;
+    }
+    
+    for (const tweet of result.tweets) {
+      if (!seenIds.has(tweet.id)) {
+        seenIds.add(tweet.id);
+        allTweets.push(tweet);
+      }
+    }
+  }
+  
+  // Apply spam filter + strict relevance filter
+  const afterSpam = filterSpamTweets(allTweets);
+  const afterRelevance = filterForStrictRelevance(afterSpam, cleanSymbol, name);
+  
+  // Sort by engagement to prioritize quality
+  const sorted = afterRelevance.sort((a, b) => {
+    const aScore = (a.public_metrics?.like_count || 0) + (a.public_metrics?.retweet_count || 0) * 2;
+    const bScore = (b.public_metrics?.like_count || 0) + (b.public_metrics?.retweet_count || 0) * 2;
+    return bScore - aScore;
+  });
+  
+  console.log(`Raw Twitter search: ${allTweets.length} found → ${afterSpam.length} spam-free → ${sorted.length} relevant`);
+  
+  return { tweets: sorted.slice(0, maxResults) };
+}
+
+// Strict relevance filter - rejects tweets about OTHER tokens with similar names
+function filterForStrictRelevance(tweets: Tweet[], symbol: string, name?: string): Tweet[] {
+  const cleanSymbol = symbol.toLowerCase().replace(/^\$/, "");
+  const nameWords = name?.toLowerCase().split(/\s+/).filter(w => w.length > 3) || [];
+  const distinctiveWords = nameWords.filter(w => !['the', 'of', 'a', 'an'].includes(w));
+  
+  return tweets.filter(tweet => {
+    const text = tweet.text.toLowerCase();
+    const originalText = tweet.text;
+    
+    // STRONG REJECT: Any tweet containing "CA" or "Contract" followed by any address
+    // These are almost always promoting a specific token
+    if (/\b(ca|contract|address)[:\s]+[1-9a-z]{20,}/i.test(originalText)) {
+      console.log(`[Strict] Rejected (CA promotion): ${text.substring(0, 60)}...`);
+      return false;
+    }
+    
+    // STRONG REJECT: Tweets that look like token promotions with marketcap/price mentions
+    if (/\b(marketcap|mcap|market cap)\b.*\d+k/i.test(text) || /\d+k\s*(marketcap|mcap|market cap)/i.test(text)) {
+      const hasOurCashtag = text.includes(`$${cleanSymbol}`);
+      if (!hasOurCashtag) {
+        console.log(`[Strict] Rejected (marketcap promotion): ${text.substring(0, 60)}...`);
+        return false;
+      }
+    }
+    
+    // REJECT: "I called X" or "calling X" patterns (shills)
+    if (/\b(called|calling)\b.*\$[a-z]/i.test(text)) {
+      console.log(`[Strict] Rejected (call pattern): ${text.substring(0, 50)}...`);
+      return false;
+    }
+    
+    // REJECT: Too many cashtags (portfolio posts)
+    const allCashtags = originalText.match(/\$[A-Za-z]{2,10}/g) || [];
+    if (allCashtags.length > 2) {
+      console.log(`[Strict] Rejected (too many cashtags): ${text.substring(0, 50)}...`);
+      return false;
+    }
+    
+    // REQUIRE: Must clearly reference our token
+    if (nameWords.length >= 2) {
+      // For multi-word names like "Franklin The Turtle"
+      // Must have the cashtag OR multiple distinctive words
+      const matchingWords = distinctiveWords.filter(word => text.includes(word));
+      const hasCashtag = text.includes(`$${cleanSymbol}`);
+      
+      if (matchingWords.length < Math.min(2, distinctiveWords.length) && !hasCashtag) {
+        console.log(`[Strict] Rejected (name mismatch: ${matchingWords.join(',')}): ${text.substring(0, 50)}...`);
+        return false;
+      }
+    } else {
+      // For single-word names, require cashtag or strong match
+      const hasCashtag = text.includes(`$${cleanSymbol}`);
+      const hasSymbol = new RegExp(`\\b${cleanSymbol}\\b`, 'i').test(text);
+      const hasCryptoContext = ['solana', 'token', 'coin', 'crypto'].some(kw => text.includes(kw));
+      
+      if (!hasCashtag && !(hasSymbol && hasCryptoContext)) {
+        console.log(`[Strict] Rejected (weak match): ${text.substring(0, 50)}...`);
+        return false;
+      }
+    }
+    
+    return true;
+  });
 }
 
