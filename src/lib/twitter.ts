@@ -265,7 +265,7 @@ export function filterSpamTweets(tweets: Tweet[]): Tweet[] {
   });
 }
 
-// Filter for crypto relevance - reject tweets that aren't about crypto
+// Filter for crypto relevance - reject tweets that aren't about THIS token
 export function filterForCryptoRelevance(tweets: Tweet[], symbol: string): Tweet[] {
   const cleanSymbol = symbol.replace(/^\$/, "").toLowerCase();
   
@@ -280,13 +280,18 @@ export function filterForCryptoRelevance(tweets: Tweet[], symbol: string): Tweet
     "$", "usd", "usdt", "usdc", "btc", "eth",
   ];
   
-  // If searching for a cashtag, tweets should have crypto context
   return tweets.filter(tweet => {
     const text = tweet.text.toLowerCase();
     
-    // If tweet contains cashtag version of symbol, it's likely crypto-related
-    if (text.includes(`$${cleanSymbol}`)) {
-      return true;
+    // MUST mention the specific token symbol in the tweet text
+    // Use regex to find symbol as a word (not part of another word)
+    const symbolRegex = new RegExp(`(^|\\s|\\$)${cleanSymbol}($|\\s|[.,!?:;])`, 'i');
+    const mentionsSymbol = symbolRegex.test(tweet.text);
+    
+    if (!mentionsSymbol) {
+      // Doesn't mention our specific token - reject
+      console.log(`Filtered out (no symbol): ${tweet.text.substring(0, 50)}...`);
+      return false;
     }
     
     // If tweet has contract address, it's definitely crypto
@@ -298,6 +303,23 @@ export function filterForCryptoRelevance(tweets: Tweet[], symbol: string): Tweet
     const hasCryptoContext = cryptoKeywords.some(kw => text.includes(kw));
     if (!hasCryptoContext) {
       // No crypto context - likely false positive
+      return false;
+    }
+    
+    // Check if tweet is primarily about a DIFFERENT token
+    // Count cashtags in the tweet
+    const cashtagMatches = tweet.text.match(/\$[A-Za-z]{2,10}/g) || [];
+    const otherCashtags = cashtagMatches.filter(tag => 
+      tag.toLowerCase() !== `$${cleanSymbol}`
+    );
+    
+    // If more other cashtags than our symbol, it's probably about something else
+    if (otherCashtags.length > 1) {
+      return false;
+    }
+    
+    // Check for "I called X" pattern where X is different token
+    if (/i called \$?[a-z]{2,10}/i.test(text) && !text.includes(cleanSymbol)) {
       return false;
     }
     
