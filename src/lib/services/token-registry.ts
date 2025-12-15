@@ -475,17 +475,18 @@ export async function getMultipleTokenInfo(mints: string[]): Promise<Map<string,
  * Register a user-submitted token
  */
 export function registerToken(info: Partial<TokenInfo> & { mint: string; symbol: string }): TokenInfo {
+  const { mint, symbol, ...rest } = info;
   const token: TokenInfo = {
-    mint: info.mint,
-    symbol: info.symbol,
-    name: info.name || info.symbol,
+    mint,
+    symbol,
+    name: info.name || symbol,
     decimals: info.decimals || 9,
     logoURI: info.logoURI,
     discoveredAt: new Date().toISOString(),
     lastSeen: new Date().toISOString(),
     source: "user",
     verified: false,
-    ...info,
+    ...rest,
   };
   
   tokenCache.set(info.mint, {

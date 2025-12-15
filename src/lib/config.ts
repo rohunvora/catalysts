@@ -29,6 +29,12 @@ export const config = {
     apiUrl: "https://lunarcrush.com/api4/public",
   },
   
+  // Grok/xAI - Real-time X search + LLM
+  grok: {
+    apiKey: process.env.GROK_API_KEY || process.env.XAI_API_KEY || "",
+    apiUrl: "https://api.x.ai/v1",
+  },
+  
   // DexScreener (free, no key needed)
   dexScreener: {
     apiUrl: "https://api.dexscreener.com",
@@ -68,6 +74,8 @@ export function isServiceConfigured(service: keyof typeof config): boolean {
       return !!config.jupiter.apiKey;
     case "lunarCrush":
       return !!config.lunarCrush.apiKey;
+    case "grok":
+      return !!config.grok.apiKey;
     case "dexScreener":
       return true; // Always available (no key needed)
     case "app":
@@ -76,3 +84,4 @@ export function isServiceConfigured(service: keyof typeof config): boolean {
       return false;
   }
 }
+

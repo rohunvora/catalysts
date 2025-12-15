@@ -24,7 +24,16 @@ import {
   bufferCatalyst,
 } from "@/lib/services/correlation";
 
-// Legacy imports (still used for Twitter)
+// Grok/xAI - Real-time X search + LLM narrative
+import {
+  isGrokConfigured,
+  getTokenNarrativeFromGrok,
+  narrativeToCatalystCard,
+  mentionsToCatalystCards,
+  TokenNarrative,
+} from "@/lib/services/grok";
+
+// Legacy imports (fallback when Grok not configured)
 import { searchTokenTweets } from "@/lib/twitter";
 import { generateCatalystFromNews, rankNewsByRelevance, RawNewsItem } from "@/lib/catalyst-generator";
 
@@ -91,18 +100,49 @@ export async function GET(request: NextRequest) {
     
     const catalysts: CatalystCard[] = [];
     const sources = {
+      grok: 0,
       twitter: 0,
       lunarcrush: 0,
       onchain: 0,
       price_alerts: 0,
     };
     
+    // Narrative from Grok (if available)
+    let narrative: TokenNarrative | null = null;
+    
     // Step 2: Record current price for anomaly detection
     if (priceUsd) {
       recordPrice(mint, priceUsd);
     }
     
-    // Step 3: Get social catalysts from LunarCrush (if configured)
+    // Step 3: Use Grok for real-time X search + narrative (PREFERRED)
+    if (isGrokConfigured()) {
+      try {
+        console.log(`Using Grok for ${symbol}...`);
+        narrative = await getTokenNarrativeFromGrok(symbol, name || symbol, mint);
+        
+        if (narrative) {
+          // Add main catalyst card
+          const mainCatalyst = narrativeToCatalystCard(narrative, symbol, mint);
+          if (mainCatalyst) {
+            catalysts.push(mainCatalyst);
+            bufferCatalyst(mainCatalyst);
+          }
+          
+          // Add notable mentions as cards
+          const mentionCards = mentionsToCatalystCards(narrative, symbol, mint);
+          catalysts.push(...mentionCards);
+          mentionCards.forEach(c => bufferCatalyst(c));
+          
+          sources.grok = 1 + mentionCards.length;
+          console.log(`Grok: ${sources.grok} catalysts, sentiment: ${narrative.sentiment}, buzz: ${narrative.buzz_level}`);
+        }
+      } catch (error) {
+        console.error("Grok error:", error);
+      }
+    }
+    
+    // Step 4: Get social catalysts from LunarCrush (if configured)
     if (isServiceConfigured("lunarCrush")) {
       try {
         const socialCatalysts = await generateSocialCatalysts(symbol, mint);
@@ -118,11 +158,11 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Step 4: Search Twitter (if configured)
-    if (isServiceConfigured("twitter")) {
+    // Step 5: Fallback to Twitter API (if Grok not configured)
+    if (!isGrokConfigured() && isServiceConfigured("twitter")) {
       try {
         const twitterResults = await searchTokenTweets(mint, symbol, name);
-        console.log(`Twitter: ${twitterResults.length} tweets found`);
+        console.log(`Twitter fallback: ${twitterResults.length} tweets found`);
         
         // Rank and convert to catalysts
         const rankedNews = rankNewsByRelevance(twitterResults, symbol);
@@ -183,6 +223,21 @@ export async function GET(request: NextRequest) {
       solscan_url: `https://solscan.io/token/${mint}`,
     };
     
+    // Add narrative from Grok (if available)
+    if (narrative) {
+      response.narrative = {
+        summary: narrative.summary,
+        category: narrative.category,
+        thesis: narrative.thesis,
+        risk_factors: narrative.risk_factors,
+      };
+      response.latest_catalyst = narrative.latest_catalyst;
+      response.social_sentiment = {
+        sentiment: narrative.sentiment,
+        buzz_level: narrative.buzz_level,
+      };
+    }
+    
     // Add market data if available
     if (tokenInfo) {
       response.market_data = {
@@ -194,12 +249,12 @@ export async function GET(request: NextRequest) {
       };
     }
     
-    // Add social summary if available
+    // Add social summary from LunarCrush if available (supplements Grok)
     if (isServiceConfigured("lunarCrush")) {
       try {
         const socialSummary = await getSocialSummary(symbol);
         if (socialSummary) {
-          response.social_data = {
+          response.lunarcrush_data = {
             galaxy_score: socialSummary.galaxyScore,
             sentiment: socialSummary.sentiment,
             sentiment_label: socialSummary.sentimentLabel,
