@@ -41,6 +41,55 @@ export interface TokenInsight {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Extract the first balanced JSON object from a string.
+ * Handles nested braces correctly, unlike simple regex which either:
+ * - Greedy: matches first { to LAST } (captures too much if multiple objects)
+ * - Non-greedy: matches first { to FIRST } (breaks on nested objects)
+ */
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+  
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    
+    if (char === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    
+    if (char === '"' && !escape) {
+      inString = !inString;
+      continue;
+    }
+    
+    if (inString) continue;
+    
+    if (char === '{') depth++;
+    if (char === '}') depth--;
+    
+    if (depth === 0) {
+      return text.slice(start, i + 1);
+    }
+  }
+  
+  return null; // Unbalanced braces
+}
+
+// ============================================================================
 // Grok Integration
 // ============================================================================
 
