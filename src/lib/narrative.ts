@@ -347,6 +347,12 @@ function filterTweetsForToken(tweets: Tweet[], symbol: string, name: string): Tw
   return tweets.filter(tweet => {
     const text = tweet.text.toLowerCase();
     
+    // REJECT: Airdrop mentions are almost always scams
+    if (/\bairdrop\b/i.test(text) || /\bclaim\b.*\b(your|free|now)\b/i.test(text)) {
+      console.log(`[Narrative filter] Rejected airdrop scam: ${text.substring(0, 50)}...`);
+      return false;
+    }
+    
     // Must contain the symbol with $ or as standalone word
     const hasCashtag = text.includes(`$${cleanSymbol}`);
     const hasStandaloneSymbol = new RegExp(`\\b${cleanSymbol}\\b`, 'i').test(text);

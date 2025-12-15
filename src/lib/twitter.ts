@@ -1,10 +1,11 @@
 // Twitter/X API integration for catalyst generation
 
 import { RawNewsItem } from "./catalyst-generator";
+import { config } from "./config";
 
-// Twitter API credentials - set via environment variables or fallback for demo
-const TWITTER_API_KEY = process.env.TWITTER_API_KEY ?? "kkmCpEkhUqlR43WBB9REHQT2b";
-const TWITTER_API_SECRET = process.env.TWITTER_API_SECRET ?? "nmsTQ9b4wxaceOsicQKD0NAg5LyI5m2zmS4JZr9S37VtNpfU3I";
+// Get credentials from config
+const TWITTER_API_KEY = config.twitter.apiKey;
+const TWITTER_API_SECRET = config.twitter.apiSecret;
 
 // Cache bearer token
 let bearerToken: string | null = null;
@@ -168,10 +169,14 @@ export function filterHighSignalTweets(tweets: Tweet[], minEngagement: number = 
 export function filterSpamTweets(tweets: Tweet[]): Tweet[] {
   // Spam/scam patterns to reject
   const rejectPatterns = [
-    // Giveaway/airdrop scams
-    /\b(giveaway|airdrop)\b.*\b(follow|retweet|like|rt)\b/i,
+    // AIRDROP = SCAM (almost always phishing or fake)
+    /\bairdrop\b/i,
+    /\bclaim\b.*\b(your|free|now|token|coin)/i,
+    /\beligible\b.*\b(claim|receive|get)\b/i,
+    
+    // Giveaway scams
+    /\b(giveaway)\b.*\b(follow|retweet|like|rt)\b/i,
     /\b(free)\s+(tokens?|coins?|crypto|nft)/i,
-    /claim\s+(your|free|now)/i,
     
     // Pump signals / guaranteed returns
     /\b(guaranteed|100x|1000x|10000x|easy\s*money)\b/i,
