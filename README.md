@@ -41,15 +41,41 @@ Each catalyst follows a structured data model:
 
 ## Architecture
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Data Sources  │───▶│ Correlation      │───▶│  Catalyst       │
-│                 │    │ Engine           │    │  Generator      │
-│ • Helius        │    │                  │    │                 │
-│ • Jupiter       │    │ • Price triggers │    │ • AI narratives │
-│ • DexScreener   │    │ • Event linking  │    │ • Severity      │
-│ • LunarCrush    │    │ • Pattern match  │    │ • Evidence      │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+```mermaid
+flowchart TB
+    subgraph Sources["📡 Data Sources"]
+        H[Helius]
+        J[Jupiter]
+        D[DexScreener]
+        L[LunarCrush]
+    end
+    
+    subgraph Engine["⚙️ Correlation Engine"]
+        PT[Price Triggers]
+        EL[Event Linking]
+        PM[Pattern Match]
+    end
+    
+    subgraph Output["🎯 Catalyst Generator"]
+        AI[Grok AI]
+        Card[Catalyst Card]
+    end
+    
+    H --> PT
+    J --> PT
+    D --> EL
+    L --> PM
+    
+    PT --> AI
+    EL --> AI
+    PM --> AI
+    AI --> Card
+    
+    Card --> |"severity + narrative"| API["/api/catalysts"]
+    
+    style Sources fill:#0f172a,stroke:#f59e0b,color:#fff
+    style Engine fill:#0f172a,stroke:#22c55e,color:#fff
+    style Output fill:#0f172a,stroke:#ef4444,color:#fff
 ```
 
 ## Tech Stack
