@@ -1,3 +1,8 @@
+<div align="center">
+  <img src="/.github/social-preview.png" alt="catalysts" width="800" />
+  <p><strong>Real-time catalyst detection system that explains why Solana tokens are pumping/dumping with structured event cards.</strong></p>
+</div>
+
 # Catalysts
 
 **Real-time catalyst detection system that explains why Solana tokens are pumping or dumping with structured event cards.**
